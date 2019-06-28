@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace ImageResizer
 {
@@ -38,6 +39,9 @@ namespace ImageResizer
         public void ResizeImages(string sourcePath, string destPath, double scale)
         {
             var allFiles = FindImages(sourcePath);
+            if (allFiles == null || allFiles.Count == 0) { return; } //no files
+            Task[] Tasks = new Task[allFiles.Count];
+            int iIndex = 0;
             foreach (var filePath in allFiles)
             {
                 Image imgPhoto = Image.FromFile(filePath);
@@ -49,13 +53,28 @@ namespace ImageResizer
                 int destionatonWidth = (int)(sourceWidth * scale);
                 int destionatonHeight = (int)(sourceHeight * scale);
 
-                Bitmap processedImage = processBitmap((Bitmap)imgPhoto,
+                //main problem
+                Tasks[iIndex] = ProcessImageAsync((Bitmap)imgPhoto,
                     sourceWidth, sourceHeight,
-                    destionatonWidth, destionatonHeight);
-
-                string destFile = Path.Combine(destPath, imgName + ".jpg");
-                processedImage.Save(destFile, ImageFormat.Jpeg);
+                    destionatonWidth, destionatonHeight).ContinueWith((t) => {
+                        string destFile = Path.Combine(destPath, imgName + ".jpg");
+                        t.Result.Save(destFile, ImageFormat.Jpeg);
+                    });
+                iIndex++;
             }
+            Task.WaitAll(Tasks); //純Console就不還外層控制權了
+        }
+
+        //傳說中的FAKE ASYNC
+        public async Task<Bitmap> ProcessImageAsync(Bitmap imgPhoto, int sourceWidth, int sourceHeight,
+            int destionatonWidth, int destionatonHeight)
+        {
+            return await Task.Run(() =>
+            {
+                return processBitmap(imgPhoto,
+                   sourceWidth, sourceHeight,
+                   destionatonWidth, destionatonHeight);
+            });
         }
 
         /// <summary>
